@@ -1,0 +1,139 @@
+= Comment GH-OST a sauvé nos mises en production
+Julien Roy @ Bankin'
+2020-02-24
+:example-caption!:
+:imagesdir: images
+:sourcedir: ../../main
+:testdir: ../../test
+
+== Bankin'
+
+=== Fonctionnellement
+
+- Aide à la gestion d'argent
+- Agregation données bancaire
+- Interface de virements bancaire
+- B2C : Application iOS / Android ( bankin.com )
+- B2B : API SaaS ( bridgeapi.io )
+
+=== Techniquement
+
+- Backend Java
+- Bases de données MySQL ( 3 To )
+- Hébergement AWS RDS Aurora
+
+== Problématique
+
+- Mise en production sans downtime
+- Migration de schéma de base de données
+- MySQL lock toute la table durant le processus
+- Peux prendre des heures pour certaines tables
+
+== Présentation
+
+image::https://github.com/github/gh-ost/raw/master/doc/images/gh-ost-logo-light-160.png[]
+
+*_Triggerless online schema migration for MySQL_*
+
+- GitHub ( Shlomi Noach ) : http://code.openark.org
+- Open Source
+
+=== Fonctionnement
+
+image::https://github.com/github/gh-ost/raw/master/doc/images/gh-ost-general-flow.png[]
+
+=== Utilisation
+
+[source,bash]
+----
+> gh-ost
+  --host localhost \
+  --database testdb \
+  --user root \
+  --password root \
+  --table transactions \
+  --alter 'ADD COLUMN is_deleted TINYINT' \
+----
+
+== Démonstration
+
+== Automatisation
+
+- Intégré au pipeline de déploiement
+- Orchestré par FlywayDB
+- Utilisation de JDBC pour les _CREATE TABLE_
+- Utilisation de gh-ost pour les _ALTER TABLE_
+
+=== Code
+
+[source,kotlin]
+----
+include::{sourcedir}/kotlin/flywaydb/GhostMigrationExecutor.kt[tags=main,indent=0]
+----
+
+=== Code
+
+[source,kotlin]
+----
+include::{sourcedir}/kotlin/flywaydb/GhostMigrationExecutor.kt[tags=sql,indent=0]
+----
+=== Code
+
+[source,kotlin]
+----
+include::{sourcedir}/kotlin/flywaydb/GhostMigrationExecutor.kt[tags=ghost,indent=0]
+----
+
+== Tips, bonnes pratiques
+
+- Tester sur un replicat
+- Tester en dry-run en Prod
+- Verifier les synchronisation entre les tables
+- Utiliser une session background ( `screen` , `tmux` )
+
+[.notes]
+--
+- Testing above all, try out --test-on-replica first few times. Better yet, make it continuous. We have multiple replicas where we iterate our entire fleet of production tables, migrating them one by one, checksumming the results, verifying migration is good
+- For each master migration, first issue a noop, then issue the real thing via --execute
+- Check last data sync between tables
+- Warning on locks on table ( cut-over require locking tables few seconds )
+- Always use `screen` or background session
+--
+
+== Limitations
+
+- Bin log activé ( mode RBR )
+- Foreign key non supporté
+- Triggers non supporté
+- Tables doivent partager une clé unique
+
+[.notes]
+--
+- You will need to have one server serving Row Based Replication (RBR) format binary logs. Right now FULL row image is supported. MINIMAL to be supported in the near future. gh-ost prefers to work with replicas. You may still have your master configured with Statement Based Replication (SBR).
+- Foreign key constraints are not supported. They may be supported in the future, to some extent.
+- Triggers are not supported. They may be supported in the future.
+- The two before & after tables must share a PRIMARY KEY or other UNIQUE KEY. This key will be used by gh-ost to iterate through the table rows when copying. Read more
+--
+
+== Alternatives
+
+- Percona : https://www.percona.com/doc/percona-toolkit/2.2/pt-online-schema-change.html[pt-online-schema-change]
+- Facebook : https://github.com/facebookincubator/OnlineSchemaChange[OnlineSchemaChange]
+- SoundCloud : https://github.com/soundcloud/lhm[lhm]
+
+- MySQL : Online DDL  ( bcp de limitations , pas de pause , throttle, or rollback )
+- AWS Aurora : FastDDL ( Seulement mode lab, non recommandé en Production )
+
+== Questions
+
+== Références
+
+- https://github.com/github/gh-ost
+- https://github.com/shlomi-noach/awesome-mysql
+- https://speakerdeck.com/shlominoach/githubs-online-schema-migrations-for-mysql?slide=4
+
+- https://github.blog/2016-08-01-gh-ost-github-s-online-migration-tool-for-mysql/
+- https://www.compose.com/articles/datalayer-online-schema-migrations-for-mysql-using-gh-ost/
+
+- https://fosdem.org/2020/schedule/event/mysql_github_schema/attachments/slides/4100/export/events/attachments/mysql_github_schema/slides/4100/automating_schema_migrations.pdf
+- https://github.com/square/shift

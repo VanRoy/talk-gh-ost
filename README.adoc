@@ -1,0 +1,67 @@
+= Comment GH-OST a sauvé nos mises en production
+
+Réaliser une mise en production avec des changements de schéma sur MySQL ne semble pas poser de défis particuliers.
+Sauf quand votre base de données fait 3To, que certaines tables contiennent des milliards de lignes et que votre application réalise plusieurs centaines de requêtes par secondes.
+Durant cette présentation je présenterai comment GH-OST, un outil open-source de migration de schéma créé par GitHub à sauvé nos mises en production.
+Je partagerai aussi les bonnes pratiques, les pièges à éviter ainsi que les alternatives.
+
+=== Slides
+
+https://vanroy.github.io/talk-gh-ost/
+
+=== Demonstration
+
+==== Start MySQL
+
+[source,bash]
+----
+docker compose up
+----
+
+==== Prepare schema
+
+[source,bash]
+----
+mysql src/main/sq/01_schema.sql
+mysql src/main/sq/02_procedure.sql
+mysql src/main/sq/03_prepare.sql
+----
+
+===== Migration
+
+[source,bash]
+----
+./gh-ost \
+  --host localhost \
+  --database testdb \
+  --user root \
+  --password root \
+  --allow-on-master \
+  --table 'transactions' \
+  --alter 'ADD COLUMN is_deleted TINYINT' \
+  --postpone-cut-over-flag-file=/tmp/ghost.cut
+----
+
+===== Follow
+
+[source,bash]
+----
+echo status | nc -U  /tmp/gh-ost.testdb.transactions.sock
+echo throttle | nc -U  /tmp/gh-ost.testdb.transactions.sock
+echo unthrottle | nc -U  /tmp/gh-ost.testdb.transactions.sock
+----
+
+===== Add new transaction
+
+[source,sql]
+----
+INSERT INTO testdb.transactions (user_uuid, amount, date, description, debit, timestamp_last_update)
+    VALUES ('5252d724-1018-11ec-ae5a-0242ac1a0002', 111, '2021-09-29', 'For Devoxx', 1, 0)
+----
+
+===== Cut-over
+
+[source,bash]
+----
+rm -f /tmp/ghost.cut
+----

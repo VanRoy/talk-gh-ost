@@ -1,0 +1,50 @@
+plugins {
+    id 'org.asciidoctor.jvm.revealjs' version '3.3.2'
+}
+
+version = '1.0.0-SNAPSHOT'
+
+repositories {
+    mavenCentral()
+    ruby {
+        gems()
+    }
+}
+
+revealjs {
+    version = '4.1.0'
+
+    templateGitHub {
+        organisation = 'hakimel'
+        repository = 'reveal.js'
+        tag = '3.9.2'
+    }
+}
+
+asciidoctorRevealJs {
+    sourceDir file("src/docs/asciidoc")
+
+    baseDirFollowsSourceFile()
+
+    resources {
+        from("${sourceDir}/images") {
+            include '**'
+            into 'images'
+        }
+        from("${sourceDir}/fonts") {
+            include '**'
+            into 'css/fonts'
+        }
+    }
+
+    revealjsOptions {
+        slideNumber = true
+        pushToHistory = true
+        highlightJsTheme = 'src/docs/asciidoc/css/github.css'
+        customTheme = 'src/docs/asciidoc/css/devoxx.css'
+    }
+
+}
+
+// alias
+task asciidoctor(dependsOn: asciidoctorRevealJs)
